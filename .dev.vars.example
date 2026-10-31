@@ -1,0 +1,39 @@
+# Copy to .dev.vars for local use only. Never commit real credentials.
+APP_ENV=development
+PUBLIC_ORIGIN=http://127.0.0.1:5178
+MAX_ACTIVE_JOBS=2
+DAILY_BUDGET_CENTS=0
+TRANSCRIPTION_ENABLED=false
+TRANSCRIPTION_PROVIDER=doubao
+LOCAL_ASR_TEST_ENABLED=false
+# Conservative USD-cent budget guard; set after checking your supplier tariff.
+DOUBAO_BUDGET_CENTS_PER_MINUTE=2
+DOUBAO_RESOURCE_ID=volc.seedasr.auc
+BILLING_ENABLED=false
+CREEM_MODE=test
+MEDIA_SIGNING_SECRET=replace-with-a-random-32-byte-secret
+PROBE_URL=http://127.0.0.1:8790
+PROBE_SECRET=replace-with-a-separate-random-secret
+# SUPADATA_API_KEY=
+# DOUBAO_API_KEY=
+# RESEND_API_KEY=
+# EMAIL_FROM=
+# CREEM_API_KEY=
+# CREEM_WEBHOOK_SECRET=
+# CREEM_STARTER_PRODUCT_ID=
+# CREEM_PLUS_PRODUCT_ID=
+# R2_ACCOUNT_ID=
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=
+# R2_BUCKET_NAME=transcript-studio-private
+# SUPPORT_EMAIL=
+# Local launcher creates a separate secret for the caption service.
+# CAPTION_SERVICE_URL=http://127.0.0.1:8791/extract
+# CAPTION_SERVICE_SECRET=
+# For production configure an approved OpenAI-compatible HTTPS chat endpoint:
+# LLM_API_URL=
+# LLM_MODEL=
+# LLM_API_KEY=
+LLM_DAILY_BUDGET_CENTS=0
+LLM_USER_DAILY_BUDGET_CENTS=0
+LLM_REQUEST_BUDGET_CENTS=0

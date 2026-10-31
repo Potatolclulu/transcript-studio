@@ -1,0 +1,39 @@
+{
+  "name": "transcript-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "dev:worker": "wrangler dev --port 8787 --test-scheduled",
+    "dev:probe": "python3 probe/server.py",
+    "dev:captions": "node scripts/captions.mjs",
+    "db:migrate": "wrangler d1 migrations apply DB --local",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "types": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --include-runtime false --strict-vars false",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm test && npm run build",
+    "deploy": "npm run verify && wrangler deploy"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20",
+    "hono": "^4.10.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.45.0"
+  }
+}
