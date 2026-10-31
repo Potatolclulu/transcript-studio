@@ -1,12 +1,12 @@
-# Margin · YouTube 学习库
+# Margin · 视频与播客学习库
 
-当前首版面向英文用户：收藏 YouTube 知识视频、读字幕、划线、写笔记，再从个人书架找回学习记录。Margin 是暂定界面名称。工程沿用 transcript-studio 目录，使用 React、Hono、Cloudflare Workers、D1、R2 和 Queues。
+当前支持 YouTube、哔哩哔哩 BV 视频和小宇宙公开单集：收藏内容、读字幕、划线、写笔记，再从个人书架找回学习记录。界面使用英文，支持中文正文。Margin 是暂定界面名称。工程沿用 transcript-studio 目录，使用 React、Hono、Cloudflare Workers、D1、R2 和 Queues。
 
 当前功能和上线配置见 [学习库说明](docs/learning-launch.md)。下方“转录功能”记录之前的转录模块，保留在 `/app`，不是新首页的产品范围。
 
 ## 本地运行
 
-需要 Node.js 24、npm、Python 3 和 yt-dlp。本工程已安装依赖；新机器先运行 `npm ci`。
+需要 Node.js 24、npm、Python 3、yt-dlp、ffmpeg 和 ffprobe。本工程已安装依赖；新机器先运行 `npm ci`。
 
 ```bash
 npm start
@@ -14,7 +14,9 @@ npm start
 
 在本工程目录执行。启动脚本会准备未纳入版本管理的 `.dev.vars`，生成本地服务密钥，构建前端、执行本地 D1 迁移，再启动网站和字幕服务，打开 `http://127.0.0.1:5178`。若 5178 端口已占用，会提示检查已有服务。
 
-首页点击 **Open local preview** 进入可恢复的本地预览账户。粘贴 YouTube 链接后取得可用字幕；选中文字可以就地批注或向 AI 提问。数据保存在本地模拟的 D1/R2 中，不是浏览器临时演示数据。DeepSeek 已按用户授权在本地配置并验证，付款关闭。
+首页点击 **Open local preview** 进入可恢复的本地预览账户。粘贴三个平台的公开链接即可导入。YouTube 获取可用字幕；B 站和小宇宙优先获取字幕，没有字幕时使用服务端豆包极速版生成带时间戳的正文。选中文字可以就地批注或向 AI 提问。数据保存在本地模拟的 D1/R2 中。DeepSeek 已按用户授权在本地配置并验证，付款关闭。
+
+跨平台后台任务、媒体和识别分段保存在被 Git 忽略的 `.wrangler/media-cache`；刷新页面会复用任务，已完成的识别分段不会重发。默认最多两个任务同时执行，单条内容最长两小时，每日识别上限 180 分钟。新机器须在 `.dev.vars` 配置具备 `volc.bigasr.auc_turbo` 权限的 `DOUBAO_API_KEY`。上线要求和真实样例验收见 [平台接入说明](docs/platform-media-support.md)。
 
 需开发热更新时，分别启动 `npm run dev:worker` 和 `npm run dev`。Vite 使用 5178，代理 API 到 8787；不要同时运行 `npm start`。
 
@@ -34,9 +36,10 @@ npm start
 
 ```bash
 npm run verify
+python3 -m unittest discover -s probe -p 'test_media.py'
 ```
 
-类型检查、实际 SQLite 账务/并发测试、供应商边界测试和前端构建。自动化测试使用模拟外部服务，不代表真实 Supadata、Resend、Creem 验收。浏览器本地样例流程已完成；真实跨平台获取与识别质量需要账户配置后实测。
+类型检查、实际 SQLite 账务/并发测试、供应商边界测试和前端构建。自动化测试使用模拟外部服务，不代表真实 Supadata、Resend、Creem 验收。用户提供的 B 站视频和小宇宙单集已完成真实获取、豆包识别、播放跳转与笔记保存验收；结果和限制见 [平台接入说明](docs/platform-media-support.md)。
 
 正式开通所需配置、限制与人工操作见 [上线准备](docs/launch.md)。
 

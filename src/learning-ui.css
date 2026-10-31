@@ -1,4 +1,9 @@
 /* Margin's shared visual layer. Reader dimensions remain owned by its resize hook. */
+.ll-player-host video{width:100%;height:100%;object-fit:contain;background:#111;display:block}
+.ll-audio-player{padding:28px 20px;background:#f2f0eb;border:1px solid #e2dfd6;border-radius:8px}
+.ll-audio-player>span{display:block;margin-bottom:18px;font-size:13px;color:#777}
+.ll-audio-player audio{width:100%;display:block}
+.ll-native-pending{padding:44px 20px;text-align:center;background:#f2f0eb;border:1px solid #e2dfd6;border-radius:8px;color:#777}
 .ll-root {
   --ll-paper: #faf9f5;
   --ll-surface: #fffefa;

@@ -18,7 +18,9 @@ export function startCaptions() {
   const executable = process.env.YT_DLP || (existsSync(helper) ? helper : 'yt-dlp');
   const child = spawn('python3',['probe/captions.py'],{
     stdio:['ignore','inherit','inherit'],
-    env:{...process.env,CAPTION_SERVICE_SECRET:secret,YT_DLP:executable,HOST:'127.0.0.1',PORT:'8791'},
+    env:{...process.env,CAPTION_SERVICE_SECRET:secret,YT_DLP:executable,
+      DOUBAO_API_KEY:get('DOUBAO_API_KEY')||'',MEDIA_ASR_DAILY_MINUTES:get('MEDIA_ASR_DAILY_MINUTES')||'180',
+      HOST:'127.0.0.1',PORT:'8791'},
   });
   return child;
 }

@@ -1,4 +1,4 @@
-"""Authenticated public YouTube captions service. Does not download audio."""
+"""Authenticated public captions service with persistent public media jobs."""
 import hmac
 import html
 import json
@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != "/extract":
+        if self.path not in ("/extract", "/jobs"):
             return self.respond(404, {"error": "Not found."})
         if not SECRET or not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SECRET):
             return self.respond(401, {"error": "Unauthorized."})
@@ -154,6 +154,12 @@ class Handler(BaseHTTPRequestHandler):
             size = 0
         if not 0 < size <= 4096:
             return self.respond(413, {"error": "Invalid request size."})
+        if self.path == "/jobs":
+            try:
+                import media
+                return self.respond(202, media.submit(json.loads(self.rfile.read(size))))
+            except (ValueError, KeyError, TypeError) as error:
+                return self.respond(422, {"error": str(error)[:300]})
         if not SLOTS.acquire(blocking=False):
             return self.respond(429, {"error": "Caption service is busy. Please retry shortly."})
         try:
@@ -169,10 +175,32 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             SLOTS.release()
 
+    def do_GET(self):
+        self.media_request()
+
+    def do_HEAD(self):
+        self.media_request(True)
+
+    def media_request(self, head=False):
+        if not SECRET or not hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + SECRET):
+            return self.respond(401, {"error": "Unauthorized."})
+        match = re.fullmatch(r"/(jobs|media)/([a-f0-9]{64})", self.path)
+        if not match:
+            return self.respond(404, {"error": "Not found."})
+        try:
+            import media
+            if match[1] == "jobs":
+                return self.respond(200, media.status(match[2]))
+            media.serve(self, match[2], head)
+        except ValueError as error:
+            self.respond(404, {"error": str(error)[:300]})
+
 
 if __name__ == "__main__":
     if len(SECRET) < 24:
         raise SystemExit("Set a separate CAPTION_SERVICE_SECRET of at least 24 characters.")
+    import media
+    media.initialize()
     server = ThreadingHTTPServer((os.environ.get("HOST", "127.0.0.1"), int(os.environ.get("PORT", "8791"))), Handler)
-    print("Public YouTube caption service listening; no audio or API keys are logged.", flush=True)
+    print("Public captions and media service listening; credentials are never logged.", flush=True)
     server.serve_forever()

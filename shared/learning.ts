@@ -51,6 +51,8 @@ export type CaptionTrack = z.infer<typeof trackSchema>;
 export type CaptionResult = z.infer<typeof captionResultSchema>;
 export type Anchor = z.infer<typeof anchorSchema>;
 export type LibraryVideo = {
+  platform: 'youtube' | 'bilibili' | 'xiaoyuzhou'; source_id: string;
+  media_kind: 'embed' | 'video' | 'audio'; media_key: string | null; import_progress: string | null;
   id: string; youtube_id: string; url: string; title: string; author: string; duration: number;
   caption_status: 'queued' | 'importing' | 'ready' | 'partial' | 'none' | 'error';
   selected_track: string | null; tracks: CaptionTrack[]; tags: string[];
@@ -106,6 +108,33 @@ export function youtubeInput(value: string) {
   }
   if (!/^[\w-]{11}$/.test(id)) throw new Error('Only single YouTube videos are supported in this version.');
   return { id, url: `https://www.youtube.com/watch?v=${id}` };
+}
+export const platformName = (platform:string) => ({youtube:'YouTube',bilibili:'bilibili',xiaoyuzhou:'Xiaoyuzhou'}[platform] || 'YouTube');
+export function mediaInput(value:string) {
+  let url:URL;
+  try { url=new URL(value.trim()); } catch { throw new Error('Paste a YouTube, bilibili or Xiaoyuzhou link.'); }
+  if(!['https:','http:'].includes(url.protocol)||url.username||url.password||url.port)
+    throw new Error('Use a public link without credentials or a custom port.');
+  const host=url.hostname.toLowerCase().replace(/^www\./,'');
+  if(['youtube.com','m.youtube.com','youtu.be'].includes(host)){
+    const input=youtubeInput(value);
+    return {...input,identity:input.id,platform:'youtube' as const,mediaKind:'embed' as const};
+  }
+  if(['bilibili.com','m.bilibili.com'].includes(host)){
+    const match=url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})\/?$/);
+    const pages=url.searchParams.getAll('p');
+    if(!match||pages.length>1||pages.length===1&&!/^[1-9]\d{0,2}$/.test(pages[0]))
+      throw new Error('Use a single bilibili BV video link with a valid part number.');
+    const part=Number(pages[0]||1),id=`${match[1]}:p${part}`;
+    return {id,identity:`bilibili:${id}`,url:`https://www.bilibili.com/video/${match[1]}/${part>1?`?p=${part}`:''}`,platform:'bilibili' as const,mediaKind:'video' as const};
+  }
+  if(host==='xiaoyuzhoufm.com'){
+    const match=url.pathname.match(/^\/episode\/([a-f0-9]{24})\/?$/);
+    if(!match)throw new Error('Use a public Xiaoyuzhou episode link.');
+    const id=match[1];
+    return {id,identity:`xiaoyuzhou:${id}`,url:`https://www.xiaoyuzhoufm.com/episode/${id}`,platform:'xiaoyuzhou' as const,mediaKind:'audio' as const};
+  }
+  throw new Error('Supported links: YouTube, bilibili BV videos and Xiaoyuzhou episodes.');
 }
 export function quoteFrom(cues: Cue[], a: Pick<Anchor, 'firstCue' | 'lastCue' | 'startOffset' | 'endOffset'>) {
   if (a.lastCue < a.firstCue || a.lastCue - a.firstCue > 80) throw new Error('Select a shorter continuous passage.');

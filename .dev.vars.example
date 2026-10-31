@@ -16,6 +16,9 @@ PROBE_URL=http://127.0.0.1:8790
 PROBE_SECRET=replace-with-a-separate-random-secret
 # SUPADATA_API_KEY=
 # DOUBAO_API_KEY=
+# Independent media-helper speech limit; requires volc.bigasr.auc_turbo permission.
+# MEDIA_ASR_DAILY_MINUTES=180
+# Helper process environment: MEDIA_CACHE_DIR, MEDIA_CACHE_MAX_MB (default 4096).
 # RESEND_API_KEY=
 # EMAIL_FROM=
 # CREEM_API_KEY=

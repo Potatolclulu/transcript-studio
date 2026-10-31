@@ -2,7 +2,7 @@
 
 Requested scope: install unslop globally and refine the existing home, library, saved notes and three-column reader. User authorization covers implementation.
 
-Unslop by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), [source](https://github.com/heydamir/unslop), CC BY 4.0. Installed unchanged at `/Users/bytedance/.trae-cn/skills/unslop`, commit `4652254daff586ff4739849395a127b56f7f8cc7`; all 13 files matched the staged SHA-256 manifest.
+Unslop by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), [source](https://github.com/heydamir/unslop), CC BY 4.0. Installed unchanged in the local skills directory, commit `4652254daff586ff4739849395a127b56f7f8cc7`; all 13 files matched the staged SHA-256 manifest.
 
 Direction:
 

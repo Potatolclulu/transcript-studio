@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, ExternalLink, Highlighter, Library, Loader2, LogOut, MessageCircle, Plus, Search, Settings2, Sparkles, StickyNote, Trash2, X } from 'lucide-react';
-import { cueAt, quoteFrom, type Anchor, type Cue, type LearningDetail, type LearningDraft, type LearningQuestion, type LearningRecord, type LibraryVideo } from '../shared/learning';
+import { cueAt, quoteFrom, platformName, type Anchor, type Cue, type LearningDetail, type LearningDraft, type LearningQuestion, type LearningRecord, type LibraryVideo } from '../shared/learning';
 import { learningApi } from './learning-api';
 import { LibraryPage, OrganizationDialog, TagEditor } from './library';
 import './learning.css';
@@ -28,8 +28,8 @@ export function LearningApp(){
     const pop=()=>{if(!guard.current()){history.go(1);return;}setPath(location.pathname+location.search);};
     window.addEventListener('popstate',pop);return()=>window.removeEventListener('popstate',pop);
   },[]);
-  useEffect(()=>{document.title=path.startsWith('/library')?'Your learning library — Margin':'Margin — A reading room for YouTube';
-    document.querySelector('meta[name="description"]')?.setAttribute('content','A personal learning library for YouTube. Read along, highlight ideas, keep notes and return to your questions.');
+  useEffect(()=>{document.title=path.startsWith('/library')?'Your learning library — Margin':'Margin — A reading room for videos and podcasts';
+    document.querySelector('meta[name="description"]')?.setAttribute('content','A personal learning library for YouTube, bilibili and Xiaoyuzhou. Read along, highlight ideas, keep notes and return to your questions.');
     const robots=document.querySelector('meta[name="robots"]')||document.head.appendChild(Object.assign(document.createElement('meta'),{name:'robots'}));
     robots.setAttribute('content',path.startsWith('/library')||path.startsWith('/auth')?'noindex, nofollow':'index, follow');
   },[path]);
@@ -54,10 +54,10 @@ export function LearningApp(){
     {!loaded?<div className="ll-empty"><Loader2 className="ll-spin"/>Opening your library…</div>:
       path.startsWith('/auth/verify')?<div className="ll-empty">Verifying your sign-in link… <button onClick={()=>setLogin(true)}>Request another link</button></div>:
       path.startsWith('/library')?user?(videoId?<Reader key={videoId} id={videoId} path={path} navigate={navigate} config={config} guard={guard}/>:<LibraryPage navigate={navigate} path={path} config={config}/>):<div className="ll-empty"><BookOpen size={32}/><h2>Your library is private.</h2><p>Sign in to find your videos and learning records.</p><button className="ll-button ll-solid" onClick={()=>setLogin(true)}>Sign in</button>{config.demo&&<button className="ll-link" onClick={localPreview}>Open local preview</button>}</div>:
-      <main className="ll-landing"><div className="ll-hero"><div className="ll-kicker">Your videos, with room to think</div><h1>A reading room<br/>for YouTube.</h1><p>Read the transcript beside the video. Highlight a passage, write a note or ask a question. Keep it all in your personal library.</p><button className="ll-button ll-solid" onClick={()=>user?navigate('/library'):setLogin(true)}>Start your library <ArrowRight size={17}/></button>{config.demo&&<button className="ll-link" onClick={localPreview}>Open local preview →</button>}<div className="ll-hero-foot">For lectures, interviews and ideas worth returning to.</div></div>
+      <main className="ll-landing"><div className="ll-hero"><div className="ll-kicker">Your videos, with room to think</div><h1>A reading room<br/>for ideas.</h1><p>Read beside videos and podcasts from YouTube, bilibili and Xiaoyuzhou. Highlight a passage, write a note or ask a question. Keep it all in your personal library.</p><button className="ll-button ll-solid" onClick={()=>user?navigate('/library'):setLogin(true)}>Start your library <ArrowRight size={17}/></button>{config.demo&&<button className="ll-link" onClick={localPreview}>Open local preview →</button>}<div className="ll-hero-foot">For lectures, interviews and ideas worth returning to.</div></div>
         <div className="ll-book-preview"><div className="ll-preview-label"><span className="ll-dot"/>Read, then make a note <span>Example</span></div><div className="ll-preview-title">A question worth keeping</div><p className="ll-preview-author">Original example text · not a video transcript</p><div className="ll-preview-passage"><span>01:24</span><p>Some ideas make sense when we first hear them. <mark>Understanding deepens when we pause to ask a question of our own.</mark> A note gives that question somewhere to stay.</p></div><div className="ll-preview-note"><StickyNote size={16}/><div><small>Your note</small><p>What would it look like to use this idea in my work?</p></div></div><div className="ll-preview-tabs"><span><Highlighter size={16}/>Highlight</span><span><StickyNote size={16}/>Add note</span><span><Sparkles size={16}/>Ask AI</span></div></div>
         <div className="ll-principles"><div><span>01</span><h3>Collect your videos</h3><p>Group lectures and interviews by topic on one shelf.</p></div><div><span>02</span><h3>Read beside the source</h3><p>Follow the transcript and keep your notes in the margin.</p></div><div><span>03</span><h3>Find the idea again</h3><p>Search across videos and notes. Return to the exact passage.</p></div></div>
-        <footer className="ll-footer">Private learning library · YouTube captions first · Early preview</footer>
+        <footer className="ll-footer">Private learning library · Videos and podcasts · Early preview</footer>
       </main>}
     {login&&<SignIn close={()=>setLogin(false)} config={config} local={async()=>{await localPreview();setLogin(false);}}/>}
   </div>;
@@ -84,17 +84,66 @@ function loadYouTube(){
   });
   return youtubeReady;
 }
-function VideoPlayer({video,onTime,handle,start}:{video:LibraryVideo;onTime:(time:number,playing:boolean)=>void;handle:React.RefObject<PlayerHandle|null>;start?:number}){
-  const frame=useRef<HTMLIFrameElement>(null),callback=useRef(onTime),[error,setError]=useState(''),[ready,setReady]=useState(false);
+type PlayerProps={video:LibraryVideo;onTime:(time:number,playing:boolean)=>void;onPlaybackAction?:()=>void;handle:React.RefObject<PlayerHandle|null>;start?:number};
+function VideoPlayer(props:PlayerProps){
+  return props.video.platform==='youtube'?<YouTubePlayer {...props}/>:<NativePlayer {...props}/>;
+}
+function NativePlayer({video,onTime,onPlaybackAction,handle,start}:PlayerProps){
+  const media=useRef<HTMLMediaElement|null>(null),callback=useRef(onTime),initial=useRef(start??video.playback_position);
+  const playbackAction=useRef(onPlaybackAction),restoringPosition=useRef(false);
+  const [error,setError]=useState(''),[ready,setReady]=useState(false);
   callback.current=onTime;
+  playbackAction.current=onPlaybackAction;
+  useEffect(()=>{
+    const player=media.current;if(!player)return;
+    handle.current={seek:seconds=>{
+      const target=Math.max(0,Math.min(video.duration,seconds));
+      if(player.readyState<1){initial.current=target;return;}
+      playbackAction.current?.();
+      player.currentTime=target;callback.current(target,false);
+      void player.play().catch(()=>setError('Press play to continue from this passage.'));
+    }};
+    const timer=setInterval(()=>callback.current(player.currentTime,!player.paused&&!player.ended),300);
+    return()=>{clearInterval(timer);handle.current=null;};
+  },[video.id,video.media_key,video.caption_status]);
+  if(!video.media_key||!['ready','partial'].includes(video.caption_status))
+    return <div className="ll-native-pending"><BookOpen size={26}/><p>{video.import_progress||'Preparing media playback…'}</p></div>;
+  const common={
+    src:`/api/library/${video.id}/media`,controls:true,preload:'metadata' as const,
+    onLoadedMetadata:()=>{const player=media.current;if(player){
+      const target=Math.min(initial.current,video.duration);
+      restoringPosition.current=Math.abs(target-player.currentTime)>.01;
+      if(restoringPosition.current)player.currentTime=target;
+      setReady(true);setError('');callback.current(player.currentTime,false);
+    }},
+    onTimeUpdate:()=>{const player=media.current;if(player)callback.current(player.currentTime,!player.paused&&!player.ended);},
+    onPlay:()=>{setError('');playbackAction.current?.();const player=media.current;if(player)callback.current(player.currentTime,true);},
+    onPause:()=>{const player=media.current;if(player)callback.current(player.currentTime,false);},
+    onSeeked:()=>{
+      if(!restoringPosition.current)playbackAction.current?.();
+      restoringPosition.current=false;
+      const player=media.current;if(player)callback.current(player.currentTime,!player.paused);
+    },
+    onError:()=>setError('Media playback is unavailable. You can read the saved transcript or open the original source.'),
+  };
+  return <><div className={video.media_kind==='audio'?'ll-audio-player':'ll-player-host'}>
+    {video.media_kind==='audio'?<><span>Podcast audio</span><audio {...common} ref={element=>{media.current=element;}} aria-label={video.title}/></>:
+      <video {...common} ref={element=>{media.current=element;}} playsInline aria-label={video.title}/>}
+  </div>{!ready&&!error&&<p className="ll-player-status">Loading playback…</p>}{error&&<p className="ll-inline-notice">{error}</p>}</>;
+}
+function YouTubePlayer({video,onTime,onPlaybackAction,handle,start}:PlayerProps){
+  const frame=useRef<HTMLIFrameElement>(null),callback=useRef(onTime),[error,setError]=useState(''),[ready,setReady]=useState(false);
+  const playbackAction=useRef(onPlaybackAction);
+  callback.current=onTime;
+  playbackAction.current=onPlaybackAction;
   useEffect(()=>{
     let alive=true,player:YTPlayer|undefined,timer:ReturnType<typeof setInterval>|undefined;
     const readiness=setTimeout(()=>{if(alive)setError('The embedded player has not connected. You can keep reading or open the original video.');},18000);
     void loadYouTube().then(()=>{
       if(!alive||!frame.current||!window.YT)return;
       player=new window.YT.Player(frame.current,{
-        events:{onReady:()=>{clearTimeout(readiness);if(!alive)return;setReady(true);setError('');handle.current={seek:s=>{player?.seekTo(s,true);callback.current(s,false);player?.playVideo();}};timer=setInterval(()=>{try{callback.current(player!.getCurrentTime(),player!.getPlayerState()===1);}catch{}},300);},
-          onStateChange:()=>{if(alive&&player)callback.current(player.getCurrentTime(),player.getPlayerState()===1);},
+        events:{onReady:()=>{clearTimeout(readiness);if(!alive)return;setReady(true);setError('');handle.current={seek:s=>{playbackAction.current?.();player?.seekTo(s,true);callback.current(s,false);player?.playVideo();}};timer=setInterval(()=>{try{callback.current(player!.getCurrentTime(),player!.getPlayerState()===1);}catch{}},300);},
+          onStateChange:()=>{if(alive&&player){const playing=player.getPlayerState()===1;if(playing)playbackAction.current?.();callback.current(player.getCurrentTime(),playing);}},
           onError:()=>{if(alive){setError('This video cannot be played here. Your transcript and notes remain available.');setReady(false);handle.current=null;}}}});
     }).catch(e=>{if(alive)setError(e.message);});
     return()=>{alive=false;clearTimeout(readiness);clearInterval(timer);handle.current=null;player?.destroy();};
@@ -259,6 +308,7 @@ function Reader({id,path,navigate,config,guard}:{id:string;path:string;navigate:
   function setPanel(next:typeof panel){layout.rememberReading();setPanelState(next);}
   const marginScroll=useRef<HTMLDivElement>(null),noteField=useRef<HTMLTextAreaElement>(null),questionField=useRef<HTMLTextAreaElement>(null);
   const draftId=useRef<string>(crypto.randomUUID()),questionId=useRef<string>(crypto.randomUUID()),queryJump=useRef(''),detailRef=useRef<LearningDetail|null>(null),pendingJump=useRef<Anchor|null>(null);
+  const pendingSourceJump=useRef<{cue:number;seconds:number}|null>(null);
   const draftWrites=useRef<Promise<unknown>>(Promise.resolve()),savedDraft=useRef(''),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),leaveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const draftDirty=note.trim()!==(editing?.body||'');
   const draftSnapshot={id:draftId.current,body:note,anchor:noteAnchor,recordId:editing?.id,recordRevision:editing?.revision,sourceQuestionId:sourceQuestion||undefined};
@@ -338,11 +388,21 @@ function Reader({id,path,navigate,config,guard}:{id:string;path:string;navigate:
   useEffect(()=>{
     if(!detail||queryJump.current===path)return;
     const params=new URLSearchParams(path.split('?')[1]||''),cue=params.get('cue'),record=params.get('record');
-    queryJump.current=path;
     const saved=detail.records.find(r=>r.id===record)?.anchor;
+    if((cue!==null||!record||saved)&&!detail.transcript)return;
+    queryJump.current=path;
     const position=saved?.firstCue??(cue!==null?Number(cue):detail.video.reading_cue);
     if(saved&&saved.trackId!==detail.transcript?.track.id)void locate(saved);
-    else if(detail.transcript&&Number.isInteger(position)&&position>=0){requestAnimationFrame(()=>centerTranscript(reader.current,position));setCurrent(position);setFollow(cue===null&&!record);progress.current.readingCue=position;setPlayhead(detail.video.playback_position);}
+    else if(detail.transcript&&Number.isInteger(position)&&detail.transcript.cues[position]){
+      requestAnimationFrame(()=>centerTranscript(reader.current,position));setCurrent(position);setFollow(cue===null&&!record);progress.current.readingCue=position;
+      const seconds=saved?.start??detail.transcript.cues[position].start;
+      setPlayhead(cue!==null||saved?seconds:detail.video.playback_position);
+      if(cue!==null||saved){
+        progress.current.playback=seconds;
+        if(player.current)player.current.seek(seconds);
+        else pendingSourceJump.current={cue:position,seconds};
+      }
+    }
     if(record){setPanel('records');requestAnimationFrame(()=>document.getElementById(`record-${record}`)?.scrollIntoView({block:'center'}));}
   },[detail,path]);
   useEffect(()=>{if(pendingJump.current&&detail?.transcript?.track.id===pendingJump.current.trackId){const a=pendingJump.current;pendingJump.current=null;jump(a.firstCue,a.start);}},[detail?.transcript?.track.id]);
@@ -357,14 +417,28 @@ function Reader({id,path,navigate,config,guard}:{id:string;path:string;navigate:
     }
     jump(anchor.firstCue,anchor.start);
   }
+  function followPlaybackAction(){
+    if(panel)return;
+    cancelPreview();setPreview(null);setSelected(null);
+    window.getSelection()?.removeAllRanges();
+    wheelIntent.current={distance:0,at:0};
+    setFollow(true);
+  }
   function onTime(seconds:number,playing:boolean){
-    const d=detailRef.current;if(!d?.transcript)return;
+    const d=detailRef.current;if(!d)return;
+    if(pendingSourceJump.current&&d.transcript&&player.current){
+      const target=pendingSourceJump.current;pendingSourceJump.current=null;jump(target.cue,target.seconds);return;
+    }
     progress.current.playback=seconds;
     setPlayhead(Math.floor(seconds));
+    if(playing&&Date.now()-lastSave.current>15000&&d.video.learning_status==='new'){
+      lastSave.current=Date.now();
+      void learningApi(`/library/${id}`,{activity:'playback'},'PATCH').then(reload).catch(e=>setError(e.message));
+    }
+    if(!d.transcript)return;
     const cues=d.transcript.cues,i=cueAt(cues,seconds);
     setCurrent(i);
     if(follow&&i>=0&&!selected&&!panel)progress.current.readingCue=i;
-    if(playing&&Date.now()-lastSave.current>15000&&d.video.learning_status==='new'){lastSave.current=Date.now();void learningApi(`/library/${id}`,{status:'learning'} , 'PATCH').catch(e=>setError(e.message));}
   }
   function captureSelection(){
     const sel=window.getSelection();if(!sel||sel.isCollapsed||!detail?.transcript)return;
@@ -514,14 +588,14 @@ function Reader({id,path,navigate,config,guard}:{id:string;path:string;navigate:
     {error&&<p className="ll-inline-error" role="alert">{error}<button onClick={()=>setError('')}>Dismiss</button></p>}
     {settings&&<div className="ll-video-settings"><button className="ll-button" onClick={()=>void openTags()}>Edit video tags</button><label>Learning status<select aria-label="Learning status" value={video.learning_status} onChange={async e=>{try{await learningApi(`/library/${id}`,{status:e.target.value},'PATCH');await reload();}catch(e){setError((e as Error).message);}}}><option value="new">Not started</option><option value="learning">Learning</option><option value="complete">Completed</option></select></label></div>}
     {tagEditor&&<OrganizationDialog title="Video tags" close={()=>setTagEditor(false)}><TagEditor ids={[id]} tags={video.tags} options={tagOptions} changed={async()=>{await reload();flash('Tags saved.');}}/></OrganizationDialog>}
-    <div className="ll-learning-columns" ref={layout.columns} style={layout.style}><section className="ll-watch"><div className="ll-video-source">YouTube <span>·</span> {video.author||'Original source'}</div><h1>{video.title}</h1><VideoPlayer video={video} onTime={onTime} handle={player} start={sourceStart}/>
+    <div className="ll-learning-columns" ref={layout.columns} style={layout.style}><section className="ll-watch"><div className="ll-video-source">{platformName(video.platform)} <span>·</span> {video.author||'Original source'}</div><h1>{video.title}</h1><VideoPlayer video={video} onTime={onTime} onPlaybackAction={followPlaybackAction} handle={player} start={sourceStart}/>
       {transcript&&<ChapterNavigator tools={readingTools.tools} seconds={playhead} cues={transcript.cues} request={readingTools.request} busy={readingTools.busy} jump={jump} ai={config.ai}/>}
-      <div className="ll-watch-meta"><span>{video.duration?`${Math.ceil(video.duration/60)} min`:'Duration pending'}</span><span>{label(video.learning_status)}</span>{video.playback_position>5&&<button className="ll-link" aria-label={`Resume video at ${time(video.playback_position)}`} onClick={()=>{if(player.current)player.current.seek(video.playback_position);else flash('Resume is available when the player connects.');}}>Resume {time(video.playback_position)} →</button>}<a className="ll-original-link" href={video.url} target="_blank" rel="noopener noreferrer">Open on YouTube <ExternalLink size={13}/></a></div>
+      <div className="ll-watch-meta"><span>{video.duration?`${Math.ceil(video.duration/60)} min`:'Duration pending'}</span><span>{label(video.learning_status)}</span>{video.playback_position>5&&<button className="ll-link" aria-label={`Resume video at ${time(video.playback_position)}`} onClick={()=>{if(player.current)player.current.seek(video.playback_position);else flash('Resume is available when the player connects.');}}>Resume {time(video.playback_position)} →</button>}<a className="ll-original-link" href={video.url} target="_blank" rel="noopener noreferrer">Open on {platformName(video.platform)} <ExternalLink size={13}/></a></div>
     </section>
     <div className="ll-reader-divider ll-video-divider" {...layout.separator('video')}><span/></div>
     <section className="ll-transcript-column"><div className="ll-transcript-heading"><div><BookOpen size={18}/><strong>Read along</strong></div><div className="ll-follow-controls">{!follow&&!panel&&<span className="ll-follow-state" role="status">Follow paused</span>}<button className={follow&&!panel?'ll-follow active':'ll-follow'} aria-pressed={follow&&!panel} disabled={!!panel} onClick={()=>{setSelected(null);window.getSelection()?.removeAllRanges();setFollow(!follow);wheelIntent.current={distance:0,at:0};if(!follow&&current>=0)centerTranscript(reader.current,current);}}>{panel?'Follow paused for notes':follow?'Following playback':'Back to playback'}</button></div></div>
       {transcript?<><div className="ll-track-row"><select aria-label="Caption language" value={video.selected_track||''} disabled={['queued','importing'].includes(video.caption_status)} onChange={async e=>{setSelected(null);try{await learningApi(`/library/${id}/import`,{trackId:e.target.value});await reload();}catch(e){setError((e as Error).message);}}}>{video.tracks.map(t=><option key={t.id} value={t.id}>{t.name} · {t.source==='manual'?'Human captions':'Auto captions'}{t.translated?' · translated':''}</option>)}</select></div>{transcript.completeness==='partial'&&<p className="ll-inline-notice">Partial transcript. Questions can only use the available passages.</p>}<label className="ll-find"><Search size={16}/><input aria-label="Find in transcript" placeholder="Find in this transcript…" value={find} onChange={e=>setFind(e.target.value)}/><span>{find?transcript.cues.filter((c,i)=>c.text.toLowerCase().includes(find.toLowerCase())||mode!=='original'&&readingTools.tools.lines[i]?.includes(find)).length+' matches':''}</span></label>
-      <TranslationControl tools={readingTools.tools} mode={mode} change={value=>{layout.rememberReading();setMode(value);setSelected(null);window.getSelection()?.removeAllRanges();}} request={readingTools.request} cue={current} busy={readingTools.busy}/>
+      <TranslationControl tools={readingTools.tools} mode={mode} change={value=>{layout.rememberReading();setMode(value);setSelected(null);window.getSelection()?.removeAllRanges();}} request={readingTools.request} cue={current} busy={readingTools.busy} originalLanguage={transcript?.track.language}/>
       {readingTools.error&&<p className="ll-inline-error" role="alert">{readingTools.error}</p>}
       <p className="ll-annotation-hint">{mode==='original'?'Select a passage to highlight, write or ask AI.':'Chinese appears below each passage as it is ready. Notes keep the original source.'}</p>
       <div className="ll-transcript-scroll" ref={reader} onMouseUp={captureSelection} onTouchEnd={()=>setTimeout(captureSelection,100)} onKeyUp={captureSelection} onWheel={e=>{
@@ -552,7 +626,7 @@ function Reader({id,path,navigate,config,guard}:{id:string;path:string;navigate:
         })}</div>
       </div>
       {selected&&<div className="ll-selection-actions ll-context-actions" role="toolbar" aria-label="Selected text actions" style={selectionPosition?{left:selectionPosition.left,top:selectionPosition.top}:undefined} onMouseDown={e=>e.preventDefault()}><button disabled={saving} onClick={highlight}><Highlighter size={15}/>Highlight</button><button onClick={()=>openNote(selected)}><StickyNote size={15}/>Add annotation</button><button onClick={()=>openAI(selected)}><Sparkles size={15}/>Ask AI</button><button aria-label="Clear selection" onClick={()=>{setSelected(null);window.getSelection()?.removeAllRanges();}}><X size={14}/></button></div>}
-      </>:<div className="ll-caption-empty">{['queued','importing'].includes(video.caption_status)?<Loader2 size={28} className="ll-spin"/>:<BookOpen size={30}/>}<h2>{label(video.caption_status)}</h2><p>{video.error||(['queued','importing'].includes(video.caption_status)?'Your video is saved. Looking for original captions; no speech recognition is started.':'This video is saved. You can watch it and write a video note. Speech recognition is not started automatically.')}</p>{!['queued','importing'].includes(video.caption_status)&&<button className="ll-button" onClick={async()=>{try{await learningApi(`/library/${id}/import`,{});await reload();}catch(e){setError((e as Error).message);}}}>Retry caption import</button>}</div>}
+      </>:<div className="ll-caption-empty">{['queued','importing'].includes(video.caption_status)?<Loader2 size={28} className="ll-spin"/>:<BookOpen size={30}/>}<h2>{label(video.caption_status)}</h2><p>{video.error||(video.platform==='youtube'?(['queued','importing'].includes(video.caption_status)?'Your video is saved. Looking for original captions.':'This video is saved. You can watch it and write a video note.'):(video.import_progress||'Your link is saved. Preparing public media and a timed transcript.'))}</p>{!['queued','importing'].includes(video.caption_status)&&<button className="ll-button" onClick={async()=>{try{await learningApi(`/library/${id}/import`,{});await reload();}catch(e){setError((e as Error).message);}}}>Retry transcript import</button>}</div>}
       {transcript&&['queued','importing'].includes(video.caption_status)&&<p className="ll-inline-notice">Importing the selected caption track. Your previous transcript remains available.</p>}
       {transcript&&video.caption_status==='error'&&<p className="ll-inline-error">{video.error}<button className="ll-link" onClick={async()=>{try{await learningApi(`/library/${id}/import`,{});await reload();}catch(e){setError((e as Error).message);}}}>Retry import</button></p>}
     </section>

@@ -54,7 +54,7 @@ export function ChapterNavigator({tools,seconds,cues,request,busy,jump,ai}:{
     setPreview({index,width,above,left:Math.max(12,Math.min(window.innerWidth-width-12,rect.left+rect.width/2-width/2)),
       top:above?rect.top-8:rect.bottom+8});
   }
-  if(!chapters.length)return <div className="ll-chapter-empty">{!task||['queued','running'].includes(task.status)?<><Loader2 size={14} className="ll-spin"/>Looking for creator chapters…</>:<><p>{task.error||'This video has no creator chapters.'}</p>{ai&&<button className="ll-link" disabled={busy} onClick={()=>void request('chapters',0,true)}><Sparkles size={13}/>Generate an AI outline</button>}{task.status==='failed'&&<button className="ll-link" disabled={busy} onClick={()=>void request('chapters')}>Retry creator chapters</button>}</>}</div>;
+  if(!chapters.length)return <div className="ll-chapter-empty">{!task||['queued','running'].includes(task.status)?<><Loader2 size={14} className="ll-spin"/>{task?.source==='ai'?'Generating an AI outline…':'Looking for creator chapters…'}</>:<><p>{task.error||'This recording has no creator chapters.'}</p>{ai&&<button className="ll-link" disabled={busy} onClick={()=>void request('chapters',0,true)}><Sparkles size={13}/>Generate an AI outline</button>}{task.status==='failed'&&<button className="ll-link" disabled={busy} onClick={()=>void request('chapters')}>Retry creator chapters</button>}</>}</div>;
   const shown=preview&&chapters[preview.index];
   return <div className="ll-chapters">
     <div className="ll-chapter-bar" ref={timeline} role="group" aria-label="Chapter timeline">{chapters.map((c,i)=><button key={c.start} className={i===active?'active':''} style={{flexGrow:c.end-c.start}} aria-label={`Go to chapter: ${c.title}`} aria-current={i===active?'true':undefined} aria-describedby={preview?.index===i?tooltipId:undefined}
@@ -69,14 +69,16 @@ export function ChapterNavigator({tools,seconds,cues,request,busy,jump,ai}:{
   </div>;
 }
 export type ReadingMode='original'|'bilingual'|'chinese';
-export function TranslationControl({tools,mode,change,request,cue,busy}:{
+export function TranslationControl({tools,mode,change,request,cue,busy,originalLanguage}:{
   tools:ReadingTools;mode:ReadingMode;change:(mode:ReadingMode)=>void;request:ReturnType<typeof useReadingTools>['request'];cue:number;busy:boolean;
+  originalLanguage?:string;
 }) {
   const task=tools.translation,waiting=task&&['queued','running'].includes(task.status);
+  if(originalLanguage?.startsWith('zh'))return <span className="ll-reading-language">Original · 中文</span>;
   return <><label className="ll-reading-language"><Languages size={15}/><select aria-label="Transcript view" value={mode} onChange={e=>{
     const value=e.target.value as ReadingMode;change(value);
     if(value!=='original'&&!task)void request('translation',Math.max(0,cue));
-  }}><option value="original">Original</option><option value="bilingual">English + 中文</option><option value="chinese">中文</option></select></label>
+  }}><option value="original">Original</option><option value="bilingual">{originalLanguage?.startsWith('en')?'English':'Original'} + 中文</option><option value="chinese">中文</option></select></label>
   {mode!=='original'&&<div className="ll-translation-status" role="status">{waiting&&<Loader2 size={13} className="ll-spin"/>}<span>{task?.source==='youtube'?'YouTube Chinese captions':task?.source==='ai'?'AI translation':'Chinese translation'}{task?` · ${task.completed.toLocaleString()} / ${task.total.toLocaleString()} passages`:''}{waiting?' · Translating in the background':''}</span>
     {task&&['paused','failed'].includes(task.status)&&<><p>{task.error}</p><button className="ll-link" disabled={busy} onClick={()=>void request('translation',Math.max(0,cue))}>Resume translation</button></>}
     {task?.status==='complete'&&task.source==='youtube'&&<button className="ll-link" disabled={busy} onClick={()=>change('original')}>Read original</button>}

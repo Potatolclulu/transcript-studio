@@ -7,6 +7,7 @@ export function harness() {
   sql.exec(readFileSync(new URL('../migrations/0002_learning.sql', import.meta.url), 'utf8'));
   sql.exec(readFileSync(new URL('../migrations/0003_reader_margin.sql', import.meta.url), 'utf8'));
   sql.exec(readFileSync(new URL('../migrations/0004_reading_tools.sql', import.meta.url), 'utf8'));
+  sql.exec(readFileSync(new URL('../migrations/0005_platform_media.sql', import.meta.url), 'utf8'));
   class Statement {
     args: any[] = [];
     constructor(public query: string) {}

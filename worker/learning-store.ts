@@ -2,6 +2,8 @@ import { AppError, now, row, rows, run, uid, type Env } from './env';
 import { anchorSchema, quoteFrom, type Anchor, type CaptionResult, type LearningDetail, type LibraryVideo } from '../shared/learning';
 
 export interface VideoRow {
+  platform: LibraryVideo['platform']; source_id:string; media_kind:LibraryVideo['media_kind'];
+  media_key:string|null; import_progress:string|null; import_attempt:number;
   id: string; user_id: string; youtube_id: string; url: string; title: string; author: string;
   duration: number; caption_status: LibraryVideo['caption_status']; selected_track: string | null;
   tracks_json: string; tags_json: string; learning_status: LibraryVideo['learning_status'];
@@ -9,7 +11,7 @@ export interface VideoRow {
   import_token: string | null; lease_until: number; created_at: number; updated_at: number;
 }
 export function visibleVideo(v: VideoRow): LibraryVideo {
-  const { user_id, tracks_json, tags_json, import_token, lease_until, ...video } = v;
+  const { user_id, tracks_json, tags_json, import_token, lease_until, import_attempt, ...video } = v;
   return { ...video, tracks: JSON.parse(tracks_json), tags: JSON.parse(tags_json) };
 }
 export async function ownVideo(env: Env, userId: string, id: string) {

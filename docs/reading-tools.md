@@ -102,3 +102,11 @@ Opening a note disabled playback follow, but the common panel-close handler did 
 After draft protection succeeds, closing the learning panel now clears the source selection, resets incidental wheel state and enables follow. The existing centering effect returns to the currently playing passage after the panel collapses. It does not seek the video back to the note's source. Failed draft saving keeps the editor open and following paused.
 
 The browser regression reproduced the original failure before the fix and passed afterwards for X closing a draft, saving a note then closing, closing an edited note, Escape closing, and a failed draft save followed by a successful close retry. Each successful close was checked for immediate centering and continued follow through the next passage; temporary notes/drafts were removed and original records verified intact. Typecheck, 64 tests and build passed.
+
+## Native playback restores subtitle follow
+
+After manually browsing subtitles, starting the bilibili or Xiaoyuzhou native player left the reader in its paused follow state. The player kept reporting its time and highlighting the current sentence, but the transcript did not scroll.
+
+Native play and seek actions now clear an unfinished selection and resume centered follow. An open learning panel still keeps following paused. Restoring the saved position on initial media loading is distinguished from a user seek, so opening a source passage does not unexpectedly change its reading mode. Manually scrolling during playback continues to pause follow until a new playback action or “Back to playback”.
+
+The original failure was reproduced through actual native player controls. Both real samples then passed six browser cases each: play after manual browsing, natural progression through subsequent sentences, manual pause during playback, native seeking, playback after text selection, and keeping follow paused while notes are open. No mocked media times were used. The existing five YouTube note-close cases, 70 application tests, typecheck and build also passed.

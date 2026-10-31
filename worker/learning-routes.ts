@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { tagsInput, youtubeInput } from '../shared/learning';
+import { tagsInput, mediaInput, platformName } from '../shared/learning';
 import { AppError, now, row, rows, run, uid, type Env, type User } from './env';
 import { auth, rateLimit } from './security';
 import { aiEnabled } from './learning-ai';
@@ -8,6 +8,8 @@ import { captionFor, enqueueLearning, learningDetail, ownVideo, recordSearch, to
 import { type Anchor } from '../shared/learning';
 import { escapeLike, libraryScope, organizationInput, organize, visibleNote } from './library-organize';
 import { readingTools, requestReading } from './reading-tools';
+import { processImport } from './learning-import';
+import { mediaEndpoint } from './platform-media';
 
 async function noteSource(env: Env, video: VideoRow, questionId: string | undefined, anchor: Anchor | null) {
   if (!questionId) return null;
@@ -71,21 +73,42 @@ learning.get('/search',async c => {
 learning.post('/',async c => {
   const userId = c.get('user').id;
   const {url} = z.object({url:z.string().max(2000)}).parse(await c.req.json());
-  let input: ReturnType<typeof youtubeInput>;
-  try { input = youtubeInput(url); } catch(e) { throw new AppError(400,(e as Error).message); }
-  const existing = await row<{id:string}>(c.env,'SELECT id FROM library WHERE user_id=? AND youtube_id=?',userId,input.id);
+  let input: ReturnType<typeof mediaInput>;
+  try { input = mediaInput(url); } catch(e) { throw new AppError(400,(e as Error).message); }
+  const existing = await row<{id:string}>(c.env,'SELECT id FROM library WHERE user_id=? AND youtube_id=?',userId,input.identity);
   if(existing) return c.json({id:existing.id,existing:true});
   await rateLimit(c.env,`learning-import:${userId}`,20,86400);
   const count = await row<{count:number}>(c.env,'SELECT COUNT(*) AS count FROM library WHERE user_id=?',userId);
   if((count?.count||0)>=200) throw new AppError(422,'The preview library limit is 200 videos.');
   const id=uid();
-  await run(c.env,`INSERT OR IGNORE INTO library(id,user_id,youtube_id,url,title,created_at,updated_at) VALUES(?,?,?,?,?,?,?)`,
-    id,userId,input.id,input.url,`YouTube · ${input.id}`,now(),now());
-  const created = (await row<{id:string}>(c.env,'SELECT id FROM library WHERE user_id=? AND youtube_id=?',userId,input.id))!;
+  await run(c.env,`INSERT OR IGNORE INTO library(id,user_id,youtube_id,url,title,platform,source_id,media_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    id,userId,input.identity,input.url,`${platformName(input.platform)} · ${input.id}`,input.platform,input.id,input.mediaKind,now(),now());
+  const created = (await row<{id:string}>(c.env,'SELECT id FROM library WHERE user_id=? AND youtube_id=?',userId,input.identity))!;
   if(created.id===id) await enqueueLearning(c.env,id,'learning');
   return c.json({id:created.id,existing:created.id!==id},202);
 });
-learning.get('/:id',async c => c.json(await learningDetail(c.env,c.get('user').id,c.req.param('id'))));
+learning.get('/:id',async c => {
+  const detail=await learningDetail(c.env,c.get('user').id,c.req.param('id'));
+  if(detail.video.platform!=='youtube'&&['queued','importing'].includes(detail.video.caption_status))
+    c.executionCtx.waitUntil(processImport(c.env,detail.video.id));
+  return c.json(detail);
+});
+learning.on(['GET','HEAD'],'/:id/media',async c=>{
+  const video=await ownVideo(c.env,c.get('user').id,c.req.param('id'));
+  if(video.platform==='youtube'||!video.media_key)throw new AppError(404,'Media is not ready yet.');
+  const headers=new Headers({Authorization:`Bearer ${c.env.CAPTION_SERVICE_SECRET}`});
+  const range=c.req.header('Range');
+  if(range){if(!/^bytes=\d*-\d*$/.test(range))throw new AppError(416,'Use a single byte range.');headers.set('Range',range);}
+  const upstream=await fetch(mediaEndpoint(c.env,`/media/${video.media_key}`),{
+    method:c.req.method,headers,redirect:'manual',signal:c.req.raw.signal,
+  });
+  if(![200,206,416].includes(upstream.status)){await upstream.body?.cancel();throw new AppError(502,'Media playback is unavailable. Please retry shortly.');}
+  const output=new Headers({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});
+  for(const name of ['Content-Type','Content-Length','Content-Range','Accept-Ranges']){
+    const value=upstream.headers.get(name);if(value)output.set(name,value);
+  }
+  return new Response(c.req.method==='HEAD'?null:upstream.body,{status:upstream.status,headers:output});
+});
 learning.get('/:id/reading',async c=>{
   const v=await ownVideo(c.env,c.get('user').id,c.req.param('id'));
   return c.json(await readingTools(c.env,v));
@@ -101,6 +124,7 @@ learning.patch('/:id',async c => {
   const body=z.object({
     tags:tagsInput.optional(),
     status:z.enum(['new','learning','complete']).optional(),
+    activity:z.literal('playback').optional(),
     playback:z.number().finite().min(0).max(14400).optional(),
     readingCue:z.number().int().min(0).max(12000).optional(),
   }).parse(await c.req.json());
@@ -109,6 +133,7 @@ learning.patch('/:id',async c => {
   const sets=['updated_at=?'],args:unknown[]=[now()];
   if(body.tags!==undefined){sets.push('tags_json=?');args.push(JSON.stringify(body.tags));}
   if(body.status!==undefined){sets.push('learning_status=?');args.push(body.status);}
+  else if(body.activity==='playback')sets.push("learning_status=CASE WHEN learning_status='new' THEN 'learning' ELSE learning_status END");
   if(body.playback!==undefined){sets.push('playback_position=?');args.push(Math.min(body.playback,v.duration||14400));}
   if(body.readingCue!==undefined){sets.push('reading_cue=?');args.push(body.readingCue);}
   await run(c.env,`UPDATE library SET ${sets.join(',')} WHERE id=? AND user_id=?`,...args,v.id,v.user_id);
@@ -131,7 +156,7 @@ learning.post('/:id/import',async c => {
       trackId,cached.completeness==='complete'?'ready':'partial',Math.max(0,cached.cues.length-1),v.id);
     return c.json({ok:true});
   }
-  await run(c.env,"UPDATE library SET caption_status='queued',selected_track=?,error=NULL WHERE id=?",trackId??v.selected_track,v.id);
+  await run(c.env,"UPDATE library SET caption_status='queued',selected_track=?,error=NULL,import_attempt=import_attempt+1,lease_until=0,import_token=NULL WHERE id=?",trackId??v.selected_track,v.id);
   await enqueueLearning(c.env,v.id,'learning');
   return c.json({ok:true},202);
 });
