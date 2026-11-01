@@ -49,4 +49,6 @@ python3 -m unittest discover -s probe -p 'test_media.py'
 
 仓库只保存源码、配置样例和项目文档。`.dev.vars`、`.env` 及其本地变体、私钥文件、依赖、构建产物、`.wrangler` 数据库与本地上传目录均已忽略。真实 API key 保留在本机 `.dev.vars`，新机器按 `.dev.vars.example` 配置；生产密钥使用 `wrangler secret put` 设置。
 
+共享文档使用公开视频和测试账户，省略具体的本地学习记录、识别任务及部署版本 ID。记录 ID 和 Cloudflare 资源 ID 是标识，不是访问凭据：读取个人资料仍需登录并通过所属用户检查，私有媒体需要账户权限或有效的限时签名。部署用的 D1 绑定仍保留在 `wrangler.jsonc`，其他部署环境应创建自己的资源并替换绑定。
+
 `.gitignore` 不会识别写进源码的密钥。每次提交前都应检查差异，日志和截图也要确认没有凭证。不要用 `git add -f` 强行加入密钥文件；私有仓库同样需要遵守这些规则。本地书架、字幕、笔记和划线数据不随 Git 上传，需另行备份。

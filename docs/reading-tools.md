@@ -52,7 +52,7 @@ Captures at 1440 × 1000:
 - [Bilingual transcript](reading-bilingual.png)
 - [Bilingual reader with notes panel](reading-bilingual-notes.png)
 
-Review the original account at `http://127.0.0.1:5178/library/d5cbf3c7-cd39-4cba-a0bf-62de5b203b58`. The local preview account has the same public video at `http://127.0.0.1:5178/library/a55fd8ec-afe5-43f6-af65-3c6f4359ae26`.
+To review locally, open `http://127.0.0.1:5178`, enter the local preview library and select the public video above. Specific account-library record IDs are omitted from this shared document.
 
 ## Follow-up fixes after reported failures
 

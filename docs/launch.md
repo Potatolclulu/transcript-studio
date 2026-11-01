@@ -4,9 +4,9 @@
 
 **2026-10-31 本地更新：语音供应商已按用户要求切换为豆包。** 本地网页完成官方 6 秒音频的真实识别、搜索、四格式导出与分钟结算；详见 [本地验证说明](local-validation.md)。这些改动尚未部署；下面的已部署版本记录仍指旧预览站。YouTube/X 音频获取和完整上传链路仍未完成，不能按原 Supadata 方案宣称支持。
 
-2026 年 10 月 31 日已部署 Cloudflare 预览站：`https://transcript-studio.transcript-studio.workers.dev`。真实转录和收款关闭，没有购买供应商套餐或发出真实付款、邮件。`Transcript Studio` 是临时品牌。
+2026 年 10 月 31 日已部署 Cloudflare 预览站。真实转录和收款关闭，没有购买供应商套餐或发出真实付款、邮件。`Transcript Studio` 是临时品牌。预览站地址按各自环境的 `PUBLIC_ORIGIN` 配置。
 
-D1 `transcript-studio`、私有 R2 `transcript-studio-private`、任务队列 `transcript-studio-tasks` 和死信队列 `transcript-studio-dead` 已创建。远端数据库迁移已完成，Workers 绑定与每分钟定时任务已部署。当前版本 `a763c53c-b8e5-4ce1-83ed-81a55d9dd8b8` 已承接 100% 流量。
+D1 `transcript-studio`、私有 R2 `transcript-studio-private`、任务队列 `transcript-studio-tasks` 和死信队列 `transcript-studio-dead` 已创建。远端数据库迁移已完成，Workers 绑定与每分钟定时任务已部署。已核对该预览版本承接 100% 流量；具体部署版本 ID 不写入共享文档。
 
 部署控制面返回成功，但当前机器通过终端和浏览器访问 `workers.dev` 都遇到连接重置，尚未完成公网页面和 API 验收。接入正式域名后仍需重新检查。现有账户允许创建资源和部署，没有核实账户当前订阅套餐，也没有升级或扣款。
 
